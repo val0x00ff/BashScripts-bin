@@ -1,0 +1,88 @@
+#!/bin/bash
+
+trap '' SIGQUIT
+trap '' SIGTSTP
+trap '' SIGINT
+
+version()
+{
+	cat << EOF
+-------------------------------------------------------------
+## Description		[Disable logical cores to save
+			power on laptop batteries]
+## Copyright 		[Free to modify and improve]
+## Name			[Valentin Bajrami]
+## Year			[2013]
+-------------------------------------------------------
+EOF
+}
+version
+
+warn() 
+{
+	printf '%s\n' "$@" >&2
+}
+
+die() 
+{
+	local st="$?"
+	warn "$@"
+	exit "$st"
+}
+
+(( EUID == 0 )) || die "Must be root"
+
+cpuarray=()
+ while IFS= read -rd '' cpu 
+  do cpuarray+=("$cpu")
+  done < <(find /sys/devices/system/ -type d -name 'cpu[0-9]' -print0)
+
+cpuenable=1
+cpudisable=0
+enabled=$(tput setaf 2)
+not_avail=$(tput setaf 1)
+reset=$(tput sgr0)
+
+for cpu in "${!cpuarray[@]}"
+	do
+	 if [[ $cpu == 0 ]]; then 
+	  printf '%s\n' "Excluded cpu0 $not_avail [NOT AVAILIABLE] $reset"
+	  continue
+	 fi
+	printf '%s\n' "Availiable cpu's: $cpu $enabled [AVAILIABLE] $reset" 
+	echo $cpuenable > "${cpuarray[cpu]}/online" 2>/dev/null
+	done
+	echo
+	printf '%s\n' "Enabled CPU's"
+
+   enabledCPUs()
+	{
+	while read -r line 
+	 do printf '%s\n' "CPU $line $enabled [ENABLED] $reset"
+         done < <(grep "processor" /proc/cpuinfo | awk '{print $3'} | sed '1d')
+	echo
+	printf '%s\n' "To enable all CPUs, please re-run the script"
+	echo
+	}
+	enabledCPUs
+	echo
+
+  declare -i cpuid
+	while :
+    do
+          read -p "Disable CPU (15 to quit): " cpuid 
+
+	case $cpuid in
+	 [0-9])
+		echo $cpudisable > "${cpuarray[$cpuid]}/online"
+		printf '%s\n\n' "cpu$cpuid disabled"
+		enabledCPUs
+		;;
+	 15)
+		printf '%s\n' "Quit on request"
+		exit 1
+		;;
+	 *) printf '%s\n\n' "Not a valid cpu or command";;
+
+	esac
+    done
