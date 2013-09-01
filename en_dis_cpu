@@ -75,7 +75,7 @@ for cpu in "${!cpuarray[@]}"
 	case $cpuid in
 	 [0-9])
 	 	(( cpuid == 0 )) && continue
-		echo $cpudisable > "${cpuarray[$cpuid]}/online"
+		echo $cpudisable > "${cpuarray[$cpuid]}/online" 2>/dev/null
 		printf '%s\n\n' "cpu$cpuid disabled"
 		enabledCPUs
 		;;
