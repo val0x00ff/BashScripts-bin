@@ -45,7 +45,7 @@ for cpu in "${!cpuarray[@]}"
 	{
 	while read -r line 
 	 do printf '%s\n' "CPU $line $enabled [ENABLED] $reset"
-         done < <(awk  '$NR < 1 && /processor/{print $3} /proc/cpuinfo )
+         done < <(awk  '$NR < 1 && /processor/{print $3}' /proc/cpuinfo )
 	echo
 	printf '%s\n' "To enable all CPUs, please re-run the script"
 	echo
