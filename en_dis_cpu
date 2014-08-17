@@ -4,20 +4,6 @@ trap '' SIGQUIT
 trap '' SIGTSTP
 trap '' SIGINT
 
-version()
-{
-	cat << EOF
--------------------------------------------------------------
-## Description		[Disable logical cores to save
-			power on laptop batteries]
-## Copyright 		[Free to modify and improve]
-## Name			[Valentin Bajrami]
-## Year			[2013]
--------------------------------------------------------
-EOF
-}
-version
-
 warn() 
 {
 	printf '%s\n' "$@" >&2
