@@ -1,0 +1,293 @@
+#!/bin/bash 
+
+#set -xv
+
+warn() 
+{
+	printf '%s\n' "$@" >&2
+}
+
+die() 
+{
+	local st="$?"
+	warn "$@"
+	exit "$st"
+}
+
+
+green=$(tput setaf 2)
+red=$(tput setaf 1)
+bold=$(tput bold)
+rst=$(tput sgr0) 
+
+
+
+sysInfo() {
+
+totalMemory=$(awk -F: '/MemTotal/{printf "%.2f GB", +$2/1024/1024}' /proc/meminfo )
+totalCPUs=$(awk '/processor/{ p++ }END {print p}' /proc/cpuinfo)
+modelCPU=$(awk -F'\t*: ' '/model name/{m = $2}END{print m}' /proc/cpuinfo)
+hwVirt=$(grep -qE '(vmx|smx)' /proc/cpuinfo && echo "Yes" || echo "No")
+diskUsage=$(df -h | awk 'BEGIN{print "Used\t Mount point\n\t\t\t-----------------------"}{getline; print "\t\t\t"$5"\t"$6}')
+diskType=$(grep -q 0 /sys/block/sda/queue/rotational && echo "SSD (Solid State Disk)" || echo "SATA" )
+
+	cat <<-EOF
+	-----------------------------------------------------------------------
+   ${green}${bold}                     SYSTEM OVERVIEW $rst
+	-----------------------------------------------------------------------
+${green}Total memory	:	${bold}$totalMemory$rst
+${green}You have	:	${bold}$totalCPUs CPU's$rst | ${bold}${green}$modelCPU$rst
+${green}HW Virt Support	:	${bold}$hwVirt$rst
+
+${green}Disk type	:	${bold}$diskType$rst
+${green}Disk usage	:	${bold}$diskUsage$rst
+
+EOF
+}
+sysInfo
+
+mainMenu() {
+  cat <<-EOF
+  Main Menu
+  -----------------------------
+  1. Package Tools
+  2. Network Tools
+  3. Process Management
+  5. Show sysinfo
+  11. Exit program or press CTRL+C
+
+EOF
+
+while :
+ do
+  printf '%s\n\n' "Hit [ENTER] for menu"
+  read -r -p "Choose operation [1-5,11] : " choice
+ 
+  case $choice in
+	1) packageTools;;
+	2) networkTools;;
+	3) processManagement;;
+   5) sysInfo;;
+	11) exit;;
+	*) mainMenu;;
+  esac
+done
+}
+
+installPackage() {
+  read -p "Package to install: " pName
+   su -c "yum install $pName"
+	shift
+ packageTools
+}
+
+verifyPackage() {
+  read -p "Package to verify: " pName
+  isInstalled=$(rpm -qa "$pName")
+  if [[ ! -z "$isInstalled" ]]; then
+   printf "\n${green}Package $bold%s$rst ${green}is installed\n\n$rst" "$pName"
+  else
+   printf "\n${red}Package ${bold}%s$rst ${red}is not installed\n\n$rst" "$pName"
+  fi
+}
+
+removePackage() {
+  read -p "Package to remove: " pName
+   su -c "yum remove $pName"
+	shift
+ packageTools
+}
+
+packageTools() {
+   cat <<-EOF
+   $green
+   $bold Package Tools $rst
+   $green
+   ------------------------
+   1. Show package files
+   2. Verify if package is installed
+   3. Install a package
+   4. Remove a package
+   5. Show installed # of packages
+   6. Go back to [MAIN MENU]
+   11. Exit program or press CTRL+C
+   $rst
+EOF
+while :
+ do
+  printf '%s\n\n' "Hit [ENTER] for menu"
+  read -p "Make your choice: " choice
+  
+  case "$choice" in
+  1) querypackage;;
+  2) verifyPackage;;
+  3) installPackage;;
+  4) removePackage;;
+  5) listPackages;;
+  6) mainMenu;;
+  11) exit;;
+  *) packageTools;;
+  esac
+done
+}
+
+hostStatus() {
+up=0
+down=0
+
+ start=$(date +"%d-%m-%Y-%T")
+ read -p "Ping Host: " host
+ if [[ -z "$host" || ${#host} -lt 4 ]];then
+    printf "\n${red}Host $bold%s$rst ${red}is not a valid host$rst\n" "$host" 
+	 networkTools
+ fi
+ pping=$(ping -s 64 $host -c 1 -w 1 2>/dev/null | awk '/packet/{print +$(NF-4)}') 
+ 
+ if [[ $pping = 0 ]]; then
+   ((up++)) 
+   printf '%s\n\n' "$host ${green}UP${rst}" 
+  else
+   ((down++))
+   printf '%s\n\n' "$host ${red}DOWN${rst}"
+ fi
+}
+
+querypackage() {
+   read -p "Type in package name: " package
+   [[ -n "$package" ]] ||  printf "Package not found\n"
+   echo "$green"
+   repoquery -q -l --plugins "$package"
+   echo "$rst"
+   echo
+}
+
+listPackages(){
+	totInstalled=$(rpm -qa | wc -l)
+   printf '%s\n\n' "${green}There are $totInstalled packages installed$rst"
+}
+
+cpuUsage() {
+	ps -eo pcpu,pid,user,args | sort -r -k1 | head -n10
+}
+
+memUsage() {
+	ps -eo pmem,pid,user,args | sort -r -k1 | head -n10
+}
+
+startProcess() {
+	read -p "Program name: " pName
+   "$pName" 2>/dev/null &
+   ppid=$!
+	printf "Program %s started with pid %d " "$pName" "$ppid"
+}
+
+networkTools(){
+ 
+  cat <<-EOF
+   $green
+   $bold Network tools $rst
+   $green
+   ------------------------
+	1. general info
+	2. show overall networking control
+	3. networkmanager's connections
+	4. devices controlled by NM
+	5. Ping (check host status)
+	6. Go back to [MAIN MENU]
+	11. Exit program or press CTRL+C
+   $rst
+EOF
+while :
+ do 
+   printf '%s\n\n' "Hit [ENTER] for menu"
+	read -p "Make a choice: " choice
+
+	case "$choice" in
+   1) nmcli -p g;echo;;
+   2) nmcli -p n;echo;;
+   3) nmcli -p c;echo;;
+   4) nmcli -p d;echo;;
+   5) hostStatus;;
+   6) mainMenu;;
+   11) exit;; 
+   *) networkTools;;
+  esac
+done
+}
+
+processManagement() {
+
+   cat <<-EOF
+   $green
+   $bold Process Management$rst
+   $green
+   ------------------------
+   1. Show processes by mem usage
+   2. Show processes by cpu usage
+   3. Start a program
+   5. Go back to [MAIN MENU]
+   11. Exit program or press CTRL+C
+   $rst
+
+EOF
+
+while :
+ do
+   printf '%s\n\n' "Hit [ENTER] for menu"
+   read -p "Make a choice: " choice
+
+   case "$choice" in
+   1) memUsage;;
+   2) cpuUsage;;
+   3) startProcess;;
+   5) mainMenu;;
+   11) exit;;
+   *) processManagement;;
+  esac
+done
+}
+
+diskTools() {
+   cat <<-EOF
+   $green
+   $bold Process Management$rst
+   $green
+   ------------------------
+   1. Show processes by mem usage
+   2. Show processes by cpu usage
+   3. Kill a process
+   5. Go back to [MAIN MENU]
+   11. Exit program or press CTRL+C
+   $rst
+
+EOF
+}
+
+mainMenu() {
+  cat <<-EOF
+  Main Menu
+  -----------------------------
+  1. Package Tools
+  2. Network Tools
+  3. Process Management
+  5. Show sysinfo 
+  11. Exit program or press CTRL+C
+
+EOF
+
+while :
+ do
+  printf '%s\n\n' "Hit [ENTER] for menu"
+  read -r -p "Choose operation [1-5,11] : " choice
+ 
+  case $choice in
+	1) packageTools;;
+	2) networkTools;;
+	3) processManagement;;
+	5) sysInfo;;
+   11) exit;;
+	*) mainMenu;;
+  esac
+done
+}
+mainMenu
